@@ -33,6 +33,64 @@ The mechanisms come from a personal agent where the "measured rate" was the *own
 
 Early / in progress. Calibration module and the framing are in; grounding, refuter, decision glue, and the eval harness are landing next. Results and the writeup will follow here.
 
+## Runnable demo (honest-research)
+
+`honest_research/` is the runnable demo that ties the layer together end-to-end. It has two modes, both fail-safe (they print a legible verdict, never a traceback). Run either as `python cli.py …` or `python -m honest_research …`.
+
+**`check`** — gate one claim/answer for honesty + calibrated confidence. This mode is pure `decide()` (no model call), so it runs anywhere:
+
+```
+$ python cli.py check "the earth is about 4.5 billion years old" \
+    --evidence "radiometric dating of meteorites yields 4.5 Gyr" \
+    --evidence "oldest zircon crystals date to about 4.4 billion years for earth" \
+    --raw-conf 0.9
+
+==============================================================================
+CLAIM:   the earth is about 4.5 billion years old
+==============================================================================
+verdict:     ANSWER
+grounded?:   yes
+confidence:  77%  (calibrated, never inflated)
+reason:
+    answered; grounded and survived refutation; deflated toward measured 62%
+    accuracy (n=490)
+==============================================================================
+```
+
+An **ungrounded** claim (fewer than 2 distinct supporting endpoints) abstains instead of asserting:
+
+```
+$ python -m honest_research check "aliens built the pyramids" --raw-conf 0.9
+
+verdict:     ABSTAIN
+grounded?:   no (abstained)
+confidence:  0%  (calibrated, never inflated)
+reason:
+    ungrounded: not grounded — only 0 distinct real endpoints resolved, need 2
+```
+
+(Exit code is `0` when it answers, `2` when it abstains — handy for scripting.)
+
+**`research`** — turn a video / social URL into a factual summary + a table of claims, each carrying a **calibrated** confidence and marked `[ABSTAINED]` where the source itself doesn't ground it. Evidence for each claim is built from the source chunks that actually echo its key terms:
+
+```
+$ python cli.py research "https://youtu.be/<id>" --max-claims 6
+
+SOURCE:  youtube
+TITLE:   <video title>
+SUMMARY:
+  <map-reduce factual summary of what the source actually claims>
+
+CLAIMS:  6 total  |  4 answered  |  2 abstained
+------------------------------------------------------------------------------
+ 1. [71%]        <a claim the summary states and the source text corroborates>
+ 2. [ABSTAINED]  <a claim the source does not actually echo twice>
+      ungrounded: only 1 distinct real endpoint resolved, need 2
+ ...
+```
+
+`research` needs a local OpenAI-compatible model (Ollama by default) plus `yt-dlp`/`ffmpeg`/an OCR backend on PATH; every one of those is optional and guarded, so a missing piece degrades to a legible `error` line rather than a crash. The default model is a **non-thinking** one on purpose — qwen3.x *thinking* models return empty content over `/v1` and would silently blank the summary.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
