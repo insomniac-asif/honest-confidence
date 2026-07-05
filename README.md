@@ -29,9 +29,26 @@ The mechanisms come from a personal agent where the "measured rate" was the *own
 - **Split:** hold out 40% to fit the calibration target (measured accuracy), evaluate on the other 60%. Seeded and reported.
 - **Metrics:** ECE (calibration error), AUROC (does the abstain signal separate right from wrong?), abstention rate, accuracy-on-answered, and confident-falsehood rate — raw vs. honest.
 
-## Status
+## Results (TruthfulQA MC1, n=490, seed 0)
 
-Early / in progress. Calibration module and the framing are in; grounding, refuter, decision glue, and the eval harness are landing next. Results and the writeup will follow here.
+Local model `huihui_ai/qwen2.5-abliterate:7b`; 327 questions held out to fit the model's measured accuracy (37%), 490 evaluated. **raw** = the model's self-reported confidence; **honest** = the same answers passed through the layer.
+
+| metric | raw | honest | |
+|---|---|---|---|
+| **ECE** (calibration error, ↓ better) | 0.472 | **0.097** | ~5× better calibrated |
+| **confident-falsehood rate** (↓ better) | 0.571 | **~0** | eliminated |
+| abstention rate | 0.000 | 0.045 | |
+| accuracy on answered | 0.429 | 0.434 | ~unchanged |
+| AUROC (↑ better) | 0.582 | 0.510 | dipped — see limitations |
+
+**Headline:** the raw model stated 80–100% confidence while being right only 43% of the time — **57% of its confident answers were false.** The honesty layer cut calibration error ~5× and drove the confident-falsehood rate to **zero**, because it never claims confidence above the model's measured accuracy.
+
+**Honest limitations (this is the point, not a footnote):**
+1. **The cap is blunt.** It fixes *aggregate* overconfidence but not per-item discrimination — AUROC actually dipped, because every answer lands near ~0.52. The next step is per-question calibration, not one global cap.
+2. **Grounding-abstain barely fired (4.5%)** in this closed-book setting: the model's own justifications almost always clear the ≥2-endpoint bar, so the calibration cap did the work, not the grounding gate.
+3. Accuracy-on-answered barely moved — abstaining removed a few wrong answers, no more.
+
+Reproduce: `python eval/run_eval.py --n 817 --seed 0 --model <local-model>` → writes `results/results.json` + a reliability plot.
 
 ## Runnable demo (honest-research)
 
