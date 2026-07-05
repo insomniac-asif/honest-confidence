@@ -1,0 +1,8 @@
+# core eval + metrics
+numpy>=1.24
+scikit-learn>=1.3          # AUROC, calibration helpers
+matplotlib>=3.7            # reliability diagrams
+datasets>=2.14             # TruthfulQA loader (HuggingFace)
+
+# local model client (Ollama exposes an OpenAI-compatible endpoint at /v1)
+openai>=1.0
