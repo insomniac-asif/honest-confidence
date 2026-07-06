@@ -94,7 +94,11 @@ def decide(
         # -- 3. answer + calibrate ---------------------------------------------
         cal, note = calibration.calibrate_confidence(
             raw_conf, measured_rate, graded=graded, margin=margin)
+        # Surface the grounding verdict on the answer too (not just on abstain), so a
+        # caller can SEE what supported the claim and why it earned this confidence —
+        # legibility, not a change to the number.
         return {"answer": answer, "abstain": False, "calibrated_conf": cal,
+                "grounding": ground_reason,
                 "reason": "answered; grounded and survived refutation; %s" % note}
     except Exception as exc:
         return {"answer": None, "abstain": True, "calibrated_conf": 0.0,

@@ -78,15 +78,19 @@ If you take one thing from this post, take this section.
 
 **4. External validity is thin.** One weak 7B model, one seed, one benchmark, MC1 only, no confidence intervals. The direction of the effect should be robust (a hard cap will always deflate an overconfident model's ECE), but the magnitudes are specific to a model that happens to be very overconfident and ~40% accurate. A stronger model has less room for the cap to help and more discrimination for it to destroy — larger models are already reasonably calibrated on well-formatted multiple-choice (Kadavath et al., 2022), so this intervention is for the regime where they aren't: smaller local models, agentic settings, distribution shift.
 
-## 6. Future work
+## 6. Where the same gap shows up (RAG, and yes, NotebookLM)
+
+The layer splits into two halves: **grounding/abstain** (cite real support or stay silent) and **calibration** (never state confidence above measured accuracy). Production retrieval-augmented systems have shipped the *first* half — they cite sources so you can verify — but not the second. A grounded assistant hands you a cited claim with no signal for whether the underlying source is a strong result or a weak one, and no measured reliability behind the certainty of its phrasing. That is the same asymmetry this eval exposes in miniature: grounding is the easy, visible half; honest *calibration* of the grounded claim is the half nobody measures. Closing it is the point of the directions below.
+
+## 7. Future work
 
 - **Per-question calibration.** Replace the single global cap with a calibrator that conditions on the item, so the layer can *rank* as well as deflate. The bar is concrete: recover AUROC *above* the raw 0.582 while holding ECE near 0.10 — deflate without flattening. The missing ingredient is a per-item signal that actually varies with correctness — token logprobs, agreement across self-consistency samples, or a grounding score backed by real retrieval instead of self-citation — then a monotone map (Platt or isotonic, fit on the same held-out validation split) from that signal to a probability. Temperature scaling (Guo et al., 2017) is the reference point — one scalar on the logits, rank-preserving, fixing ECE without touching AUROC, the exact mirror of what my cap did — but it can't be applied here directly: this pipeline has only the model's *verbalized* confidence, not logits. This bullet directly targets the AUROC regression, the most important negative result here.
 - **A retrieval-grounded arm.** Give the grounding gate real endpoints (a retrieval index over a corpus) instead of the model's own justifications, on an open-book benchmark, so abstain-on-ungrounded is actually exercised and can be measured.
 - **Scale the sweep.** Bootstrap confidence intervals, ≥5 seeds, multiple models across the calibration spectrum, and MC2/generative variants — to separate "the cap always deflates ECE" (trivially true) from "the layer helps a model you'd actually deploy."
 
-## 7. Relation to prior work
+## 8. Relation to prior work
 
-This sits downstream of three lines of work: **TruthfulQA** (Lin, Hilton & Evans, 2021) as the benchmark purpose-built for confident imitative falsehoods; the **calibration** literature — Guo et al. (2017) for ECE, reliability diagrams, and temperature scaling, which is exactly the per-item direction §6 points at; and the **model self-knowledge** line — Kadavath et al. (2022) on whether models know what they know, which frames the question my grounding gate crudely approximates from the outside. My contribution is narrow and empirical: not a new method, but an honest measurement of a simple, deployable intervention — *and* a clear statement of where it fails, which is the part a method paper usually omits.
+This sits downstream of three lines of work: **TruthfulQA** (Lin, Hilton & Evans, 2021) as the benchmark purpose-built for confident imitative falsehoods; the **calibration** literature — Guo et al. (2017) for ECE, reliability diagrams, and temperature scaling, which is exactly the per-item direction §7 points at; and the **model self-knowledge** line — Kadavath et al. (2022) on whether models know what they know, which frames the question my grounding gate crudely approximates from the outside. My contribution is narrow and empirical: not a new method, but an honest measurement of a simple, deployable intervention — *and* a clear statement of where it fails, which is the part a method paper usually omits.
 
 **References**
 
@@ -94,7 +98,7 @@ This sits downstream of three lines of work: **TruthfulQA** (Lin, Hilton & Evans
 - Guo, C., Pleiss, G., Sun, Y., & Weinberger, K. Q. (2017). *On Calibration of Modern Neural Networks.* ICML 2017. [arXiv:1706.04599](https://arxiv.org/abs/1706.04599)
 - Kadavath, S., et al. (2022). *Language Models (Mostly) Know What They Know.* [arXiv:2207.05221](https://arxiv.org/abs/2207.05221)
 
-## 8. Reproducing
+## 9. Reproducing
 
 ```bash
 pip install -r requirements.txt

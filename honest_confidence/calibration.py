@@ -83,6 +83,52 @@ def fit_measured_rate(preds: Iterable[Tuple[float, bool]]) -> Tuple[float, int]:
     return acc, len(pairs)
 
 
+def corroborated_cap(
+    raw_conf: float,
+    measured_rate: float,
+    n_endpoints: int,
+    base_margin: float = DEFAULT_MARGIN,
+    per_endpoint: float = 0.03,
+    max_margin: float = 0.30,
+) -> Tuple[float, str]:
+    """EXPERIMENTAL / NOT YET MEASURED — a corroboration-aware variant of the flat cap.
+
+    Idea: a claim backed by MORE distinct real endpoints should be allowed a slightly
+    higher confidence ceiling than one backed by the bare minimum. The margin grows a
+    little per supporting endpoint beyond the required 2, bounded by ``max_margin``::
+
+        margin = min(max_margin, base_margin + per_endpoint * max(0, n_endpoints - 2))
+        calibrated = min(raw, measured_rate + margin)     # still never inflates
+
+    The motivation is the eval's central negative result: the flat cap fixes ECE but
+    flattens per-item discrimination (AUROC → chance). If endpoint count correlates with
+    correctness, letting it modulate the cap would restore some ranking signal — the
+    thing a single global cap throws away.
+
+    ⚠️ **This is not validated.** On the closed-book TruthfulQA eval the grounding gate
+    fires rarely (evidence is the model's own justifications, not real retrieval), so
+    endpoint count barely varies and this cannot be measured there. It needs a
+    retrieval-grounded eval, and it must be reported as a WIN only after AUROC-vs-ECE is
+    measured against the flat cap (see WRITEUP §7). Until then it is a designed,
+    implemented, *unmeasured* direction — do not claim it improves anything.
+
+    Returns ``(calibrated, note)``. Never inflates; fail-safe returns clamped raw.
+    """
+    try:
+        raw = _clamp01(raw_conf)
+        rate = _clamp01(measured_rate)
+        n = max(0, int(n_endpoints))
+        margin = min(max_margin, base_margin + per_endpoint * max(0, n - 2))
+        cal = round(min(raw, rate + margin), 2)
+        if cal > raw:
+            cal = raw
+        note = ("[experimental] corroboration-aware: %d endpoints -> margin %.2f, "
+                "capped at measured %.0f%%+margin (UNMEASURED)" % (n, margin, rate * 100))
+        return cal, note
+    except Exception:
+        return _clamp01(raw_conf), ""
+
+
 def calibration_health(measured_rate: float, graded: int,
                        margin: float = DEFAULT_MARGIN,
                        min_graded: int = DEFAULT_MIN_GRADED) -> dict:

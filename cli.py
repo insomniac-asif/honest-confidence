@@ -84,6 +84,11 @@ def _render_check(claim: str, verdict: Dict[str, Any]) -> str:
         "verdict:     %s" % status,
         "grounded?:   %s" % grounded,
         "confidence:  %s  (calibrated, never inflated)" % cal,
+    ]
+    support = verdict.get("grounding")          # what actually grounded the claim
+    if support:
+        out.append("support:     %s" % _wrap(str(support), indent="             ").strip())
+    out += [
         "reason:",
         _wrap(str(verdict.get("reason", "")), indent="    "),
         _rule("="),
