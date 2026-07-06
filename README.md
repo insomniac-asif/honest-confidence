@@ -17,10 +17,10 @@ The mechanisms come from a personal agent where the "measured rate" was the *own
 | module | what it does |
 |---|---|
 | `honest_confidence/calibration.py` | `calibrate_confidence(raw, measured_rate)` → deflates toward measured accuracy; **never inflates**. `fit_measured_rate()` fits the rate on a held-out split. |
-| `honest_confidence/grounding.py` | abstain unless a claim resolves to **≥2 distinct supporting endpoints** (pluggable resolver). *(in progress)* |
-| `honest_confidence/refuter.py` | a zero-model gate: default-drop on spurious / trivial / analogy-quarantined claims. *(in progress)* |
-| `honest_confidence/decision.py` | the glue: `decide(question, raw_conf, evidence) → answer \| ABSTAIN, calibrated_conf, reason`. *(in progress)* |
-| `eval/run_eval.py` | one reproducible entry point: raw model vs. model+honesty-layer on **TruthfulQA**, reporting ECE, AUROC, abstention rate, accuracy-on-answered, and confident-falsehood rate. *(in progress)* |
+| `honest_confidence/grounding.py` | abstain unless a claim resolves to **≥2 distinct supporting endpoints** (pluggable resolver). |
+| `honest_confidence/refuter.py` | a zero-model gate: default-drop on spurious / trivial / analogy-quarantined claims. |
+| `honest_confidence/decision.py` | the glue: `decide(question, raw_conf, evidence) → answer \| ABSTAIN, calibrated_conf, reason`. |
+| `eval/run_eval.py` | one reproducible entry point: raw model vs. model+honesty-layer on **TruthfulQA**, reporting ECE, AUROC, abstention rate, accuracy-on-answered, and confident-falsehood rate. |
 
 ## The eval, briefly
 
@@ -36,16 +36,16 @@ Local model `huihui_ai/qwen2.5-abliterate:7b`; 327 questions held out to fit the
 | metric | raw | honest | |
 |---|---|---|---|
 | **ECE** (calibration error, ↓ better) | 0.472 | **0.097** | ~5× better calibrated |
-| **confident-falsehood rate** (↓ better) | 0.571 | **~0** | eliminated |
+| **confident-falsehood rate** (↓ better) | 0.571 | **undefined** | nothing clears the 0.70 bar once capped (see below) |
 | abstention rate | 0.000 | 0.045 | |
 | accuracy on answered | 0.429 | 0.434 | ~unchanged |
 | AUROC (↑ better) | 0.582 | 0.510 | dipped — see limitations |
 
-**Headline:** the raw model stated 80–100% confidence while being right only 43% of the time — **57% of its confident answers were false.** The honesty layer cut calibration error ~5× and drove the confident-falsehood rate to **zero**, because it never claims confidence above the model's measured accuracy.
+**Headline:** on answers stated at ≥0.70 confidence, the raw model was wrong **57%** of the time. The honesty layer cut calibration error ~5×. It also left no answer confident enough (≥0.70) to count as a confident falsehood — but that rate is **undefined, not zero**: once the cap (0.52) sits below the threshold, the "win" is by construction. ECE is the number that actually survives scrutiny. Full analysis: [WRITEUP.md](WRITEUP.md).
 
 **Honest limitations (this is the point, not a footnote):**
-1. **The cap is blunt.** It fixes *aggregate* overconfidence but not per-item discrimination — AUROC actually dipped, because every answer lands near ~0.52. The next step is per-question calibration, not one global cap.
-2. **Grounding-abstain barely fired (4.5%)** in this closed-book setting: the model's own justifications almost always clear the ≥2-endpoint bar, so the calibration cap did the work, not the grounding gate.
+1. **The cap is blunt.** It fixes *aggregate* overconfidence but not per-item discrimination — AUROC dipped to chance. (Precisely: the honest arm's AUROC scores its answer-vs-abstain gate, which abstains on only 22/490 items that aren't preferentially wrong — a near-constant signal; and its calibrated confidences are almost all exactly 0.52, so scoring those instead wouldn't help either.) The next step is per-question calibration, not one global cap.
+2. **Grounding-abstain barely fired** in this closed-book setting — 21/490 (4.3%) grounding + 1 analogy-quarantine: the model's own justifications almost always clear the ≥2-endpoint bar, so the calibration cap did the work, not the grounding gate.
 3. Accuracy-on-answered barely moved — abstaining removed a few wrong answers, no more.
 
 Reproduce: `python eval/run_eval.py --n 817 --seed 0 --model <local-model>` → writes `results/results.json` + a reliability plot.
@@ -67,10 +67,10 @@ CLAIM:   the earth is about 4.5 billion years old
 ==============================================================================
 verdict:     ANSWER
 grounded?:   yes
-confidence:  77%  (calibrated, never inflated)
+confidence:  52%  (calibrated, never inflated)
 reason:
-    answered; grounded and survived refutation; deflated toward measured 62%
-    accuracy (n=490)
+    answered; grounded and survived refutation; deflated toward measured 37%
+    accuracy (n=327)
 ==============================================================================
 ```
 

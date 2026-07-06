@@ -53,11 +53,13 @@ from .model_client import (
 
 # -- honesty tunables ---------------------------------------------------------------
 # measured_rate / graded are the accuracy the model has been MEASURED at on a held-out
-# split (see honest_confidence.calibration.fit_measured_rate). These are demo defaults;
-# a real deployment fits them on its own eval. 0.62 over 490 graded items mirrors the
-# package's documented example so calibrated_conf is never oversold.
-DEFAULT_MEASURED_RATE = 0.62
-DEFAULT_GRADED = 490
+# split (see honest_confidence.calibration.fit_measured_rate). These defaults are the
+# values ACTUALLY measured by this repo's own TruthfulQA eval (results/results.json):
+# 0.37 accuracy fit on 327 validation items. A real deployment fits its own rate; using
+# the real measured number (not an invented one) keeps the demo's calibrated_conf
+# honest — and conservative, which is the safe direction for a deflation-only cap.
+DEFAULT_MEASURED_RATE = 0.37
+DEFAULT_GRADED = 327
 
 _CHUNK_WORDS = 800          # ~800-word windows for map-reduce summary + grounding
 _MIN_TERM_LEN = 4           # ignore short/stopword-ish key terms when matching evidence
