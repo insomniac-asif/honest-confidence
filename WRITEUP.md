@@ -2,7 +2,7 @@
 
 *A deterministic honesty layer for LLM agents, evaluated two-arm on TruthfulQA MC1.*
 
-**TL;DR.** I built a small, deterministic layer that sits between an LLM agent and its output and enforces one rule: never state more confidence than the model has *measured* accuracy to back up, and abstain on claims it can't ground. On TruthfulQA MC1 with a weak 7B local model, it cut calibration error from ECE 0.472 to 0.097 (~5×) — and left no answer confident enough (≥0.70) to count as a confident falsehood, which, as §5 argues, is mostly the cap silencing the model rather than a separate win. It also *hurt* per-item discrimination (AUROC 0.582 → 0.510). This post is mostly about those last two clauses.
+**TL;DR.** I built a small, deterministic layer that sits between an LLM agent and its output and enforces one rule: never state more confidence than the model has *measured* accuracy to back up, and abstain on claims it can't ground. On TruthfulQA MC1 with a weak 7B local model, it cut calibration error **~3.4×** (mean ECE 0.48 → 0.14 across four seeds) — and left no answer confident enough (≥0.70) to count as a confident falsehood, which, as §5 argues, is mostly the cap silencing the model rather than a separate win. It also *hurt* per-item discrimination (AUROC ~0.58 → ~0.51, in every seed). This post is mostly about those last two clauses — and about the fact that my first single-seed run showed a rosier **5×**, which running more seeds corrected.
 
 ---
 
@@ -64,19 +64,33 @@ TruthfulQA MC1, seed 0, local model `huihui_ai/qwen2.5-abliterate:7b`. 40/60 spl
 
 On the answers it stated at ≥0.70 confidence, the raw model was wrong **57%** of the time (confident-falsehood rate 0.571); its overall accuracy on answered items was 43%. The honest arm's stated confidence never rises above the cap (0.52), so confidence and accuracy finally live in the same neighborhood: ECE drops from 0.472 to 0.097, and the reliability curve pulls off the ceiling toward the diagonal.
 
-One rigor caveat up front: all of these are **point estimates on n=490 with no confidence intervals**, and the AUROC comparison in particular rests on just 22 abstention events, so its noise is large. Raw numbers: `results/results.json`.
+### Does it hold across seeds? (I checked — and it corrected me)
+
+The table above is the reference run (seed 0). I re-ran the full two-arm eval on **four seeds** (0–3, ~2h/seed) and bootstrapped item-level CIs:
+
+| metric | raw (mean) | honest (mean) | honest range | 95% CI (seed 0) |
+|---|---|---|---|---|
+| **ECE** ↓ | 0.479 | **0.139** | 0.097–0.163 | [0.052, 0.141] |
+| **AUROC** ↑ | 0.577 | **0.509** | 0.496–0.515 | [0.493, 0.528] |
+| abstention | 0.000 | 0.048 | 0.037–0.065 | |
+| acc-on-answered | 0.413 | 0.418 | 0.396–0.434 | |
+
+- **The AUROC collapse is robust.** Honest AUROC is 0.496–0.515 in *every* seed against raw ~0.577 — "calibration bought at the price of discrimination" is not one-seed noise.
+- **The ECE win is real but smaller than seed 0 suggested.** Seed 0's honest ECE (0.097, ~5× better) was the *best* of the four; the across-seed mean is 0.139 (**~3.4×**), range 0.097–0.163. My single-seed headline oversold the magnitude by a seed, and the multi-seed run is what caught it. (The 95% CI here is bootstrapped from seed 0's items only, so it *understates* the real spread — the across-seed range is the honest uncertainty.)
+
+Per-seed raw numbers: `results/results.json` + `results/seeds/seed{1,2,3}/results.json`; aggregate: `results/aggregate.json`.
 
 ## 5. What this does *not* show (the actual point)
 
 If you take one thing from this post, take this section.
 
-**1. "Confident falsehoods eliminated" is partly a tautology — and ECE is the honest number.** The confident-falsehood rate is only defined over answers with confidence ≥ 0.70. Once every answer is capped at 0.52, *nothing* clears 0.70, so that rate isn't "zero," it's **undefined** — the layer didn't stop being confidently wrong, it stopped being *confident at all*. That's defensible behavior for a model this weak (the cap's target, 0.37, was fit on the validation split; the eval slice itself runs ~43% accurate, so the 0.52 ceiling sits deliberately close to the model's real reliability). But it would be dishonest to sell it as the headline. The number that actually survives scrutiny is **ECE**, because it measures the confidence-accuracy gap across *every* bin, not just the top one. The cap earns the ECE improvement; it gets the confident-falsehood "win" for free by definition.
+**1. "Confident falsehoods eliminated" is partly a tautology — and ECE is the honest number.** The confident-falsehood rate is only defined over answers with confidence ≥ 0.70. Once every answer is capped at 0.52, *nothing* clears 0.70, so that rate isn't "zero," it's **undefined** — the layer didn't stop being confidently wrong, it stopped being *confident at all*. That's defensible behavior for a model this weak (the cap's target, 0.37, was fit on the validation split; the eval slice itself runs ~43% accurate, so the 0.52 ceiling sits deliberately close to the model's real reliability). But it would be dishonest to sell it as the headline. The number that actually survives scrutiny is **ECE** (0.10 on seed 0, 0.14 averaged over four seeds — see §4), because it measures the confidence-accuracy gap across *every* bin, not just the top one. The cap earns the ECE improvement; it gets the confident-falsehood "win" for free by definition.
 
 **2. The cap is blunt: it buys calibration at the price of discrimination.** AUROC went *down*, 0.582 → 0.510 — from "slightly better than chance" to "chance." Two things matter here, and the second is subtle. First, the arms feed AUROC different signals: the raw arm is scored on the model's own graded confidence, which carries a little ranking signal (its 0.9s were marginally more often right than its 0.8s). The honest arm is scored on the layer's answer-vs-abstain decision (1 = answer, 0 = abstain) — and because it abstains on only 22 of 490 items, and those abstentions aren't preferentially wrong, that near-constant gate can't separate correct from incorrect: ~0.5 is what a flat signal earns. Second, scoring the honest arm's confidences instead wouldn't rescue it — 468 of 490 land at exactly 0.52 and the rest at 0, so there is almost no variation left to rank with. Either way you score it, **the layer replaces a weakly-informative graded signal with an almost-flat one.** One global cap fixes aggregate overconfidence but cannot tell a good answer from a bad one.
 
 **3. The grounding gate barely fired, so it's mostly untested here.** The grounding gate abstained on 21 of 490 items (4.3%) and the analogy quarantine on 1 more (total abstention 4.5%). In closed-book TruthfulQA the only "evidence" available is the model's own justifications, which almost always clear the ≥2-endpoints bar — a confabulating model is happy to produce two confident-sounding reasons. So the calibration cap did essentially all the work. The gate is built to lean on a *real* resolver — a retrieval index, a code repo, a KB — and this eval doesn't give it one. Its value is unproven until it's tested against external endpoints, not self-justifications.
 
-**4. External validity is thin.** One weak 7B model, one seed, one benchmark, MC1 only, no confidence intervals. The direction of the effect should be robust (a hard cap will always deflate an overconfident model's ECE), but the magnitudes are specific to a model that happens to be very overconfident and ~40% accurate. A stronger model has less room for the cap to help and more discrimination for it to destroy — larger models are already reasonably calibrated on well-formatted multiple-choice (Kadavath et al., 2022), so this intervention is for the regime where they aren't: smaller local models, agentic settings, distribution shift.
+**4. External validity is thin.** One weak 7B model, four seeds (0–3), one benchmark, MC1 only. The multi-seed check (§4) confirms the *direction* is robust — ECE always improves, AUROC always craters to chance — but the magnitudes are specific to a model that happens to be very overconfident and ~40% accurate. A stronger model has less room for the cap to help and more discrimination for it to destroy — larger models are already reasonably calibrated on well-formatted multiple-choice (Kadavath et al., 2022), so this intervention is for the regime where they aren't: smaller local models, agentic settings, distribution shift.
 
 ## 6. Where the same gap shows up (RAG, and yes, NotebookLM)
 
@@ -86,7 +100,7 @@ The layer splits into two halves: **grounding/abstain** (cite real support or st
 
 - **Per-question calibration.** Replace the single global cap with a calibrator that conditions on the item, so the layer can *rank* as well as deflate. The bar is concrete: recover AUROC *above* the raw 0.582 while holding ECE near 0.10 — deflate without flattening. The missing ingredient is a per-item signal that actually varies with correctness — token logprobs, agreement across self-consistency samples, or a grounding score backed by real retrieval instead of self-citation — then a monotone map (Platt or isotonic, fit on the same held-out validation split) from that signal to a probability. Temperature scaling (Guo et al., 2017) is the reference point — one scalar on the logits, rank-preserving, fixing ECE without touching AUROC, the exact mirror of what my cap did — but it can't be applied here directly: this pipeline has only the model's *verbalized* confidence, not logits. This bullet directly targets the AUROC regression, the most important negative result here.
 - **A retrieval-grounded arm.** Give the grounding gate real endpoints (a retrieval index over a corpus) instead of the model's own justifications, on an open-book benchmark, so abstain-on-ungrounded is actually exercised and can be measured.
-- **Scale the sweep.** Bootstrap confidence intervals, ≥5 seeds, multiple models across the calibration spectrum, and MC2/generative variants — to separate "the cap always deflates ECE" (trivially true) from "the layer helps a model you'd actually deploy."
+- **Scale the sweep further.** Four seeds (0–3) with item-level bootstrap CIs are now done (§4); the axes still open are multiple models across the calibration spectrum and MC2/generative variants — to separate "the cap always deflates ECE" (trivially true) from "the layer helps a model you'd actually deploy."
 
 ## 8. Relation to prior work
 
@@ -104,6 +118,13 @@ This sits downstream of three lines of work: **TruthfulQA** (Lin, Hilton & Evans
 pip install -r requirements.txt
 python eval/run_eval.py --n 817 --seed 0 --model huihui_ai/qwen2.5-abliterate:7b
 # writes results/results.json + results/reliability.png
+```
+
+Multi-seed robustness + bootstrap CIs — offline mode avoids a HuggingFace re-fetch that can hang in some environments:
+
+```bash
+HF_HUB_OFFLINE=1 python eval/multiseed.py --seeds 0 1 2 3 --model huihui_ai/qwen2.5-abliterate:7b
+# writes results/seeds/seed{N}/ + results/aggregate.json + a paste-ready table
 ```
 
 (TruthfulQA MC1 has 817 questions, so `--n 817` selects all of them; `round(817 × 0.40) = 327` gives the 327/490 split. `--n 0` is equivalent.)

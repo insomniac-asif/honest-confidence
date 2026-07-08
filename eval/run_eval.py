@@ -42,6 +42,7 @@ import json
 import os
 import random
 import sys
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 # --- package imports (repo root on sys.path so this runs as a plain script) ----------
@@ -221,10 +222,15 @@ def run_eval(model: str, base_url: str, timeout: float, n: int, seed: int,
     val_rows, eval_rows = split_val_eval(rows, seed=seed)
 
     # -- fit measured_rate on VALIDATION (the honest calibration target) --------------
+    # Optional inter-call throttle (env EVAL_DELAY seconds) so the run can share the GPU
+    # with e.g. a live stream — spreads the load out. Results are unchanged, only slower.
+    _delay = float(os.environ.get("EVAL_DELAY", "0") or 0)
     val_pairs: List[Tuple[float, bool]] = []
     for r in val_rows:
         res = answer_row(r, model, base_url, timeout)
         val_pairs.append((res["raw_conf"], res["correct"]))
+        if _delay:
+            time.sleep(_delay)
     measured_rate, graded = calibration.fit_measured_rate(val_pairs)
 
     # -- score EVAL under both arms ---------------------------------------------------
@@ -274,6 +280,8 @@ def run_eval(model: str, base_url: str, timeout: float, n: int, seed: int,
             "honest_conf": hon_conf[-1],
             "honest_reason": verdict.get("reason"),
         })
+        if _delay:
+            time.sleep(_delay)
 
     raw_arm = _arm_metrics(
         raw_conf, raw_correct,

@@ -35,13 +35,13 @@ Local model `huihui_ai/qwen2.5-abliterate:7b`; 327 questions held out to fit the
 
 | metric | raw | honest | |
 |---|---|---|---|
-| **ECE** (calibration error, ↓ better) | 0.472 | **0.097** | ~5× better calibrated |
+| **ECE** (calibration error, ↓ better) | 0.472 | **0.097** | ~5× on seed 0; **~3.4× mean** over 4 seeds |
 | **confident-falsehood rate** (↓ better) | 0.571 | **undefined** | nothing clears the 0.70 bar once capped (see below) |
 | abstention rate | 0.000 | 0.045 | |
 | accuracy on answered | 0.429 | 0.434 | ~unchanged |
 | AUROC (↑ better) | 0.582 | 0.510 | dipped — see limitations |
 
-**Headline:** on answers stated at ≥0.70 confidence, the raw model was wrong **57%** of the time. The honesty layer cut calibration error ~5×. It also left no answer confident enough (≥0.70) to count as a confident falsehood — but that rate is **undefined, not zero**: once the cap (0.52) sits below the threshold, the "win" is by construction. ECE is the number that actually survives scrutiny. Full analysis: [WRITEUP.md](WRITEUP.md).
+**Headline:** on answers stated at ≥0.70 confidence, the raw model was wrong **57%** of the time. The honesty layer cut calibration error **~3.4×** (mean ECE 0.48→0.14 across 4 seeds; a single lucky seed showed 5×, which the multi-seed run corrected). It also left no answer confident enough (≥0.70) to count as a confident falsehood — but that rate is **undefined, not zero**: once the cap (0.52) sits below the threshold, the "win" is by construction. ECE is the number that actually survives scrutiny. Full analysis: [WRITEUP.md](WRITEUP.md).
 
 **Honest limitations (this is the point, not a footnote):**
 1. **The cap is blunt.** It fixes *aggregate* overconfidence but not per-item discrimination — AUROC dipped to chance. (Precisely: the honest arm's AUROC scores its answer-vs-abstain gate, which abstains on only 22/490 items that aren't preferentially wrong — a near-constant signal; and its calibrated confidences are almost all exactly 0.52, so scoring those instead wouldn't help either.) The next step is per-question calibration, not one global cap.
