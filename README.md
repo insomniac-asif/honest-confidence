@@ -33,6 +33,10 @@ The mechanisms come from a personal agent where the "measured rate" was the *own
 
 Local model `huihui_ai/qwen2.5-abliterate:7b`; 327 questions held out to fit the model's measured accuracy (37%), 490 evaluated. **raw** = the model's self-reported confidence; **honest** = the same answers passed through the layer.
 
+![Reliability diagram and ECE comparison: the honesty layer pulls confidence down toward measured accuracy, cutting calibration error ~3.4x](results/calibration_summary.png)
+
+*Left — raw confidences sit high (0.6–0.97) while accuracy stays ~0.3–0.5: confidently wrong. The honesty layer caps every answered item to ~0.52, near the model's true accuracy and close to the diagonal. Right — mean ECE across 4 seeds with 95% bootstrap CIs. Both panels are generated from this repo's own results by [`eval/plot_summary.py`](eval/plot_summary.py) — nothing is hand-set.*
+
 | metric | raw | honest | |
 |---|---|---|---|
 | **ECE** (calibration error, ↓ better) | 0.472 | **0.097** | ~5× on seed 0; **~3.4× mean** over 4 seeds |
@@ -48,7 +52,7 @@ Local model `huihui_ai/qwen2.5-abliterate:7b`; 327 questions held out to fit the
 2. **Grounding-abstain barely fired** in this closed-book setting — 21/490 (4.3%) grounding + 1 analogy-quarantine: the model's own justifications almost always clear the ≥2-endpoint bar, so the calibration cap did the work, not the grounding gate.
 3. Accuracy-on-answered barely moved — abstaining removed a few wrong answers, no more.
 
-Reproduce: `python eval/run_eval.py --n 817 --seed 0 --model <local-model>` → writes `results/results.json` + a reliability plot.
+Reproduce: `python eval/run_eval.py --n 817 --seed 0 --model <local-model>` → writes `results/results.json` + a reliability plot. Regenerate the summary figure above from existing results with `python eval/plot_summary.py`.
 
 ## Runnable demo (honest-research)
 
