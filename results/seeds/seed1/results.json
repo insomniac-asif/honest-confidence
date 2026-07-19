@@ -8,7 +8,7 @@
     "margin": 0.15,
     "conf_threshold": 0.7,
     "local_json": null,
-    "out": "/home/sun-night/honest-confidence/results/seeds/seed1"
+    "out": "results/seeds/seed1"
   },
   "fit": {
     "measured_rate": 0.419,

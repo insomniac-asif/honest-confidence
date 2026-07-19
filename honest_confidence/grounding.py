@@ -1,15 +1,15 @@
 """Grounding — abstain unless a claim resolves to enough REAL, DISTINCT supporting endpoints.
 
 Extracted from a running local AI agent (an internal reasoning module) and generalized for public,
-reproducible use. The portable core is a one-line decision rule (source: ``_ground_connection``):
+reproducible use. The portable core is a one-line decision rule:
 
     a claim is grounded IFF it cites >= min_endpoints references that each resolve to a real
     thing, AND those resolved supports are DISTINCT (not one source cited twice).
 
-In the source agent the resolvers were tangled up with infrastructure — a SQLite knowledge
-base (``_kb_row_exists``), a filesystem/grep code probe (``_code_ref_exists``), and a
-type-strict dispatcher (``_verify_endpoint``). Those are all ABL-specific ways of asking one
-generic question: **does this reference point at something real?**
+In the source agent the resolvers were tangled up with infrastructure — a SQLite knowledge-base
+lookup, a filesystem/grep code probe, and a type-strict dispatcher. Those are all
+implementation-specific ways of asking one generic question: **does this reference point at
+something real?**
 
 THE HONEST GENERALIZATION: that question is hoisted into a single injectable ``resolver``
 callable ``(ref) -> bool``. The default resolver is deliberately dumb and transparent —
@@ -82,7 +82,7 @@ def is_grounded(
     something real?". If ``resolver`` is None, the default is used: a ref is real iff it
     appears in ``evidence`` (transparent, stdlib-only, no hidden store).
 
-    RULE (from the source agent's ``_ground_connection``): the claim is grounded only if at
+    RULE (as implemented in the source agent): the claim is grounded only if at
     least ``min_endpoints`` references resolve as real AND they are DISTINCT (the same source
     cited twice counts once). Otherwise it is NOT grounded and the caller should ABSTAIN.
 
