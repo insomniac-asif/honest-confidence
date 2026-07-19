@@ -37,7 +37,8 @@ import shutil
 import subprocess
 import tempfile
 import urllib.request
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, Tuple
+from urllib.parse import urlparse
 
 # --- tunables (all env-overridable so the demo is reproducible on any box) ----------
 YTDLP = shutil.which("yt-dlp") or "yt-dlp"
@@ -219,17 +220,46 @@ def fetch_tiktok(url: str, max_frames: int = 8, timeout: float = 120) -> Dict[st
     return out
 
 
+_YOUTUBE_HOSTS: Tuple[str, ...] = ("youtube.com", "youtu.be")
+_TIKTOK_HOSTS: Tuple[str, ...] = ("tiktok.com",)
+
+
+def _host_of(url: str) -> str:
+    """Parsed, lowercased hostname — "" if the URL has none.
+
+    Tolerates a missing scheme so a bare ``youtube.com/watch?v=..`` still resolves
+    to a host rather than being read as a path.
+    """
+    raw = (url or "").strip()
+    if raw and "://" not in raw:
+        raw = "//" + raw
+    try:
+        return (urlparse(raw).hostname or "").lower().rstrip(".")
+    except ValueError:          # malformed IPv6 literal, bad port, etc.
+        return ""
+
+
+def _host_matches(host: str, domains: Tuple[str, ...]) -> bool:
+    """Exact host, or a genuine subdomain of it. Never a substring."""
+    return any(host == d or host.endswith("." + d) for d in domains)
+
+
 def fetch(url: str) -> Dict[str, Any]:
     """Dispatch a URL to the right fetcher by host.
 
     ``youtube.com`` / ``youtu.be`` -> :func:`fetch_youtube`;
     ``tiktok.com``                 -> :func:`fetch_tiktok`.
     Any other host returns ``{"source": "unknown", "text": "", "error": ...}``. Never raises.
+
+    Dispatch is anchored to the PARSED HOSTNAME, not a substring of the URL. The
+    earlier ``"youtube.com" in url`` test also accepted ``evil.com/?x=youtube.com``
+    and ``youtube.com.evil.com``, either of which would have handed an
+    attacker-chosen URL to yt-dlp (CodeQL ``py/incomplete-url-substring-sanitization``).
     """
-    u = (url or "").lower()
-    if "youtube.com" in u or "youtu.be" in u:
+    host = _host_of(url)
+    if _host_matches(host, _YOUTUBE_HOSTS):
         return fetch_youtube(url)
-    if "tiktok.com" in u:
+    if _host_matches(host, _TIKTOK_HOSTS):
         return fetch_tiktok(url)
     return {"source": "unknown", "text": "",
             "error": "unsupported url (expected youtube or tiktok): %r" % url}
